@@ -20,7 +20,10 @@ Health Agent는 건강 관련 정보를 제공하는 챗봇 애플리케이션�
    git clone https://github.com/HealthAgent/health_agent_api.git
    cd health_agent_api
    ```
-
+2. 각자 디렉터리로 이동
+   ```bash
+   cd ds #js, hj, dh
+   ```
 2. 필요한 패키지 설치
    ```bash
    pip install -r requirements.txt
