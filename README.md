@@ -20,21 +20,23 @@ Health Agent는 건강 관련 정보를 제공하는 챗봇 애플리케이션�
    git clone https://github.com/HealthAgent/health_agent_api.git
    cd health_agent_api
    ```
-2. 각자 디렉터리로 이동
-   ```bash
-   cd ds #js, hj, dh
-   ```
+
 2. 필요한 패키지 설치
    ```bash
    pip install -r requirements.txt
    ```
 
-3. OpenAI API Key를 설정(생략 가능):
+3. 각자 디렉터리로 이동
+   ```bash
+   cd ds #js, hj, dh
+   ```
+
+4. OpenAI API Key를 설정(생략 가능):
    - `.streamlit/secrets.toml` 파일을 생성하고 다음과 같이 API 키를 추가
-     ```toml
-     [openai]
-     api_key = "your_api_key_here"
-     ```
+   ```toml
+   [openai]
+   api_key = "your_api_key_here"
+   ```
 
 ### 실행 방법
 
