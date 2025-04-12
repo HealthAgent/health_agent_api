@@ -1,15 +1,14 @@
 import streamlit as st
 from database import Database
 from datetime import datetime
-import openai
-from openai import OpenAI
+from langchain_openai import ChatOpenAI
 
 def validate_api_key(api_key):
     """OpenAI API 키의 유효성을 검증합니다."""
     try:
-        client = OpenAI(api_key=api_key)
+        llm = ChatOpenAI(api_key=api_key)
         # 간단한 API 호출로 키 유효성 검증
-        client.models.list()
+        llm.invoke("test")
         return True
     except Exception as e:
         return False
