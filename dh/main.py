@@ -11,7 +11,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.vectorstores import FAISS
 from langchain.embeddings import OpenAIEmbeddings
 from utils import render_with_latex
-from sidebar import render_sidebar
+from sidebar import render_gear_sidebar
 from database import Database
 import os
 import json
@@ -34,11 +34,11 @@ if "api_key_valid" not in st.session_state:
 db = Database()
 
 # Streamlit 기본 설정
-st.set_page_config(page_title="HealthAgent", page_icon=":climbing:", layout="wide")
-st.title("🏔️ Health Agent")
+st.set_page_config(page_title="등산 용품 관리 시스템", page_icon="⛰️", layout="wide")
+st.title("⛰️ 등산 용품 관리 시스템")
 
 # 사이드바 렌더링
-render_sidebar()
+render_gear_sidebar()
 
 # API 키 유효성 검증 상태 확인
 if not st.session_state.api_key_valid:
@@ -58,9 +58,8 @@ if not api_key:
 # LLM 설정
 llm = ChatOpenAI(
     api_key=api_key,
-    model="gpt-4o-mini",
-    temperature=0.7,
-    streaming=True
+    model="gpt-4",
+    temperature=0.7
 )
 
 # 임베딩 설정
@@ -74,46 +73,108 @@ memory = ConversationBufferMemory(
 
 # 프롬프트 템플릿 설정
 prompt = ChatPromptTemplate.from_messages([
-    ("system", """당신은 건강 관련 정보를 제공하는 전문 챗봇입니다. 
-    사용자의 질문에 정확하고 전문적인 답변을 제공해주세요.
-    가능한 한 자세하고 명확하게 설명해주세요.
-    """),
-    ("human", "{input}")
-])
-
-# 에이전트 프롬프트 템플릿
-agent_prompt = ChatPromptTemplate.from_messages([
-    ("system", """당신은 건강 관련 정보를 제공하는 전문 챗봇입니다.
-    사용자의 질문에 정확하고 전문적인 답변을 제공해주세요.
-    가능한 한 자세하고 명확하게 설명해주세요.
+    ("system", """당신은 등산 용품 관리를 도와주는 전문 어시스턴트입니다.
+    사용자의 등산 용품을 관리하고 조언해주세요.
+    
+    가능한 작업:
+    1. 새로운 등산 용품 등록
+    2. 등산 용품 목록 조회
+    3. 용품 상태 업데이트
     
     사용 가능한 툴:
     {tools}
-    
-    사용 방법:
-    1. 사용자의 질문을 이해합니다.
-    2. 필요한 경우 적절한 툴을 사용합니다.
-    3. 툴의 결과를 바탕으로 답변을 구성합니다.
     
     {agent_scratchpad}
     """),
     ("human", "{input}")
 ])
 
-# 커스텀 툴 정의 예시
-def search_health_info(query: str) -> str:
-    """건강 정보를 검색하는 툴"""
-    # 여기에 실제 검색 로직 구현
-    return f"검색 결과: {query}"
+# 에이전트 프롬프트 템플릿
+agent_prompt = ChatPromptTemplate.from_messages([
+    ("system", """당신은 등산 용품 관리를 도와주는 전문 어시스턴트입니다.
+    사용자의 등산 용품을 관리하고 조언해주세요.
+    
+    가능한 작업:
+    1. 새로운 등산 용품 등록
+    2. 등산 용품 목록 조회
+    3. 용품 상태 업데이트
+    
+    사용 가능한 툴:
+    {tools}
+    
+    {agent_scratchpad}
+    """),
+    ("human", "{input}")
+])
+
+# 등산 용품 관리 툴 정의
+def add_gear_tool(input_str: str) -> str:
+    """등산 용품 추가 툴"""
+    try:
+        data = json.loads(input_str)
+        user = db.get_user(data['username'])
+        if not user:
+            return "사용자를 찾을 수 없습니다."
+        
+        gear_id = db.add_hiking_gear(user[0], data)
+        if gear_id:
+            return f"성공적으로 {data['item_name']}을(를) 추가했습니다."
+        return "등산 용품 추가에 실패했습니다."
+    except Exception as e:
+        return f"오류 발생: {str(e)}"
+
+def get_user_gear_tool(username: str) -> str:
+    """사용자의 등산 용품 목록 조회 툴"""
+    try:
+        user = db.get_user(username)
+        if not user:
+            return "사용자를 찾을 수 없습니다."
+        
+        items = db.get_user_gear(user[0])
+        if not items:
+            return "등록된 등산 용품이 없습니다."
+        
+        result = "📋 등산 용품 목록:\n\n"
+        current_category = None
+        for item in items:
+            if item[3] != current_category:
+                current_category = item[3]
+                result += f"\n【{current_category}】\n"
+            result += f"• {item[2]}"
+            if item[4]:  # brand
+                result += f" ({item[4]})"
+            result += f" - {item[9]}\n"  # condition
+        return result
+    except Exception as e:
+        return f"오류 발생: {str(e)}"
+
+def update_condition_tool(input_str: str) -> str:
+    """등산 용품 상태 업데이트 툴"""
+    try:
+        data = json.loads(input_str)
+        if db.update_gear_condition(data['gear_id'], data['condition'], data.get('last_used_date')):
+            return "장비 상태가 업데이트되었습니다."
+        return "상태 업데이트에 실패했습니다."
+    except Exception as e:
+        return f"오류 발생: {str(e)}"
 
 # 툴 설정
 tools = [
     Tool(
-        name="health_search",
-        func=search_health_info,
-        description="건강 관련 정보를 검색하는 툴입니다."
+        name="add_hiking_gear",
+        func=add_gear_tool,
+        description="새로운 등산 용품을 추가합니다."
     ),
-    # 추가 툴을 여기에 정의할 수 있습니다
+    Tool(
+        name="get_user_gear",
+        func=get_user_gear_tool,
+        description="사용자의 등산 용품 목록을 조회합니다."
+    ),
+    Tool(
+        name="update_gear_condition",
+        func=update_condition_tool,
+        description="등산 용품의 상태를 업데이트합니다."
+    )
 ]
 
 # 에이전트 설정
@@ -150,7 +211,7 @@ if st.session_state.messages:
                 st.markdown(msg["content"])
 
 # 사용자 입력
-user_input = st.chat_input("메시지를 입력하세요")
+user_input = st.chat_input("무엇을 도와드릴까요?")
 
 if user_input:
     
