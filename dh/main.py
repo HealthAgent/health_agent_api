@@ -80,11 +80,9 @@ prompt = ChatPromptTemplate.from_messages([
     1. 새로운 등산 용품 등록
     2. 등산 용품 목록 조회
     3. 용품 상태 업데이트
+    4. 관련 등산 용품 추천
     
-    사용 가능한 툴:
-    {tools}
-    
-    {agent_scratchpad}
+    사용자의 질문에 친절하고 자세하게 답변해주세요.
     """),
     ("human", "{input}")
 ])
@@ -98,6 +96,7 @@ agent_prompt = ChatPromptTemplate.from_messages([
     1. 새로운 등산 용품 등록
     2. 등산 용품 목록 조회
     3. 용품 상태 업데이트
+    4. 관련 등산 용품 추천
     
     사용 가능한 툴:
     {tools}
@@ -108,6 +107,8 @@ agent_prompt = ChatPromptTemplate.from_messages([
 ])
 
 # 등산 용품 관리 툴 정의
+
+
 def add_gear_tool(input_str: str) -> str:
     """등산 용품 추가 툴"""
     try:
@@ -115,7 +116,7 @@ def add_gear_tool(input_str: str) -> str:
         user = db.get_user(data['username'])
         if not user:
             return "사용자를 찾을 수 없습니다."
-        
+
         gear_id = db.add_hiking_gear(user[0], data)
         if gear_id:
             return f"성공적으로 {data['item_name']}을(를) 추가했습니다."
@@ -123,17 +124,18 @@ def add_gear_tool(input_str: str) -> str:
     except Exception as e:
         return f"오류 발생: {str(e)}"
 
+
 def get_user_gear_tool(username: str) -> str:
     """사용자의 등산 용품 목록 조회 툴"""
     try:
         user = db.get_user(username)
         if not user:
             return "사용자를 찾을 수 없습니다."
-        
+
         items = db.get_user_gear(user[0])
         if not items:
             return "등록된 등산 용품이 없습니다."
-        
+
         result = "📋 등산 용품 목록:\n\n"
         current_category = None
         for item in items:
@@ -148,6 +150,7 @@ def get_user_gear_tool(username: str) -> str:
     except Exception as e:
         return f"오류 발생: {str(e)}"
 
+
 def update_condition_tool(input_str: str) -> str:
     """등산 용품 상태 업데이트 툴"""
     try:
@@ -157,6 +160,76 @@ def update_condition_tool(input_str: str) -> str:
         return "상태 업데이트에 실패했습니다."
     except Exception as e:
         return f"오류 발생: {str(e)}"
+
+
+def recommend_gear_tool(input_str: str) -> str:
+    """등산 용품 추천 툴"""
+    try:
+        data = json.loads(input_str)
+        user = db.get_user(data['username'])
+        if not user:
+            return "사용자를 찾을 수 없습니다."
+
+        # 사용자의 현재 장비 목록 조회
+        current_gear = db.get_user_gear(user[0])
+        if not current_gear:
+            return "등록된 등산 용품이 없습니다."
+
+        # 추천 로직 구현
+        recommendations = []
+        for item in current_gear:
+            category = item[3]
+            condition = item[9]
+
+            # 상태가 좋지 않은 장비에 대한 추천
+            if condition in ['불량', '수리 필요']:
+                # 해당 카테고리의 추천 상품 조회
+                recommended_products = db.get_recommended_products(category=category)
+                if recommended_products:
+                    for product in recommended_products:
+                        recommendations.append({
+                            'category': category,
+                            'current_item': item[2],
+                            'recommendation': f"{category} 카테고리의 {item[2]}이(가) {condition} 상태입니다. {product[2]} ({product[3]}) - {product[5]}원\n구매 링크: {product[6]}"
+                        })
+                else:
+                    recommendations.append({
+                        'category': category,
+                        'current_item': item[2],
+                        'recommendation': f"{category} 카테고리의 {item[2]}이(가) {condition} 상태입니다. 새로운 {category} 구매를 추천드립니다."
+                    })
+
+            # 관련 장비 추천
+            if category == '등산화':
+                recommended_products = db.get_recommended_products(category='등산양말')
+                if recommended_products:
+                    for product in recommended_products:
+                        recommendations.append({
+                            'category': '등산양말',
+                            'current_item': item[2],
+                            'recommendation': f"{item[2]}과 함께 사용하기 좋은 {product[2]} ({product[3]}) - {product[5]}원\n구매 링크: {product[6]}"
+                        })
+            elif category == '등산가방':
+                recommended_products = db.get_recommended_products(category='등산용품')
+                if recommended_products:
+                    for product in recommended_products:
+                        recommendations.append({
+                            'category': '등산용품',
+                            'current_item': item[2],
+                            'recommendation': f"{item[2]}에 넣기 좋은 {product[2]} ({product[3]}) - {product[5]}원\n구매 링크: {product[6]}"
+                        })
+
+        if not recommendations:
+            return "현재 추천할 만한 등산 용품이 없습니다."
+
+        result = "🎯 추천 등산 용품:\n\n"
+        for rec in recommendations:
+            result += f"• {rec['recommendation']}\n"
+
+        return result
+    except Exception as e:
+        return f"오류 발생: {str(e)}"
+
 
 # 툴 설정
 tools = [
@@ -174,8 +247,21 @@ tools = [
         name="update_gear_condition",
         func=update_condition_tool,
         description="등산 용품의 상태를 업데이트합니다."
+    ),
+    Tool(
+        name="recommend_gear",
+        func=recommend_gear_tool,
+        description="사용자의 현재 장비를 기반으로 관련 등산 용품을 추천합니다."
     )
 ]
+
+# 체인 설정
+chain = (
+    {"input": RunnablePassthrough()}
+    | prompt
+    | llm
+    | StrOutputParser()
+)
 
 # 에이전트 설정
 agent = create_openai_functions_agent(llm, tools, agent_prompt)
@@ -193,14 +279,6 @@ text_splitter = RecursiveCharacterTextSplitter(
 #     embedding=embeddings
 # )
 
-# 체인 설정
-chain = (
-    {"input": RunnablePassthrough()}
-    | prompt
-    | llm
-    | StrOutputParser()
-)
-
 # 이전 대화 히스토리 출력
 if st.session_state.messages:
     for msg in st.session_state.messages:
@@ -214,13 +292,16 @@ if st.session_state.messages:
 user_input = st.chat_input("무엇을 도와드릴까요?")
 
 if user_input:
-    
+
     # 현재 대화 세션 ID가 없으면 생성; 첫 쿼리의 10자만큼 제목으로 설정
     if not st.session_state.current_conversation_id:
         conversation_title = user_input[:10] + "..." if len(user_input) > 50 else user_input
-        st.session_state.current_conversation_id = db.create_conversation(conversation_title)
-        
-        
+        if st.session_state.get("current_user"):
+            st.session_state.current_conversation_id = db.create_conversation(conversation_title, st.session_state.current_user[0])
+        else:
+            st.error("사용자 정보를 찾을 수 없습니다. 사이드바에서 사용자 이름을 입력해주세요.")
+            st.stop()
+
     # 사용자의 첫 번째 질문을 메시지 히스토리에 추가
     st.chat_message("user").write(user_input)
     st.session_state.messages.append({"role": "user", "content": user_input})
@@ -231,14 +312,13 @@ if user_input:
         full_response = ""
 
         try:
-            # 에이전트를 사용한 응답 생성 (주석 해제하여 사용)
-            # response = agent_executor.invoke({"input": user_input})
-            # full_response = response["output"]
-
-            # 또는 기본 체인을 사용한 응답 생성
-            for chunk in chain.stream(user_input):
-                full_response += chunk
-                stream_placeholder.markdown(render_with_latex(full_response + "▌"))
+            # 에이전트를 사용한 응답 생성
+            response = agent_executor.invoke({
+                "input": user_input,
+                "agent_scratchpad": "",
+                "tools": tools
+            })
+            full_response = response["output"]
 
             # 최종 응답 표시
             stream_placeholder.empty()

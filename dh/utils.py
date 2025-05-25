@@ -1,6 +1,7 @@
 import streamlit as st
 import re
 
+
 def get_latex_css():
     """LaTeX 렌더링을 위한 CSS 스타일을 반환합니다."""
     return """
@@ -21,6 +22,7 @@ def get_latex_css():
     </style>
     """
 
+
 def render_with_latex(text: str) -> str:
     """
     - \(...\): inline 수식 → $...$로 변환
@@ -29,8 +31,8 @@ def render_with_latex(text: str) -> str:
     """
     # block 수식 변환 ( \[...\] → $$...$$ )
     text = re.sub(r"\\\[(.*?)\\\]", r"$$\1$$", text, flags=re.DOTALL)
-    
+
     # inline 수식 변환 ( \(...\) → $...$ )
     text = re.sub(r"\\\((.*?)\\\)", r"$\1$", text)
-    
+
     return text
