@@ -1,5 +1,5 @@
 import streamlit as st
-from database import Database
+from database.chatdb_manager import ChatDBManager
 from datetime import datetime
 from langchain_openai import ChatOpenAI
 
@@ -15,7 +15,7 @@ def validate_api_key(api_key):
 
 def render_sidebar():
     """사이드바 UI 렌더링"""
-    db = Database()
+    db = ChatDBManager()
     
     with st.sidebar:
         # OpenAI API 키 입력
