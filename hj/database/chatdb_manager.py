@@ -2,7 +2,7 @@ import sqlite3
 import json
 from datetime import datetime
 
-class Database:
+class ChatDBManager:
     def __init__(self, db_path="conversations.db"):
         self.db_path = db_path
         self.init_db()
