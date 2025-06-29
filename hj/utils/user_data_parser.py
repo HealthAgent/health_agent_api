@@ -1,7 +1,6 @@
 import json
 import pandas as pd
-from datetime import datetime
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List
 
 class AppleWatchDataParser:
     """Apple Watch 데이터를 파싱하고 분석하는 클래스"""

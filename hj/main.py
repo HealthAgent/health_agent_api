@@ -19,7 +19,7 @@ if "health_agent" not in st.session_state:
     st.session_state.health_agent = None
 
 # 데이터베이스 초기화
-db = ChatDBManager()
+chat_db = ChatDBManager()
 
 # Streamlit 기본 설정
 st.set_page_config(page_title="HealthAgent", page_icon=":climbing:", layout="wide")
@@ -68,12 +68,12 @@ if user_input and st.session_state.health_agent:
     # 현재 대화 세션 ID가 없으면 생성
     if not st.session_state.current_conversation_id:
         conversation_title = user_input[:20] + "..." if len(user_input) > 20 else user_input
-        st.session_state.current_conversation_id = db.create_conversation(conversation_title)
+        st.session_state.current_conversation_id = chat_db.create_conversation(conversation_title)
 
     # 사용자 메시지 표시 및 저장
     st.chat_message("user").write(user_input)
     st.session_state.messages.append({"role": "user", "content": user_input})
-    db.save_message(st.session_state.current_conversation_id, "user", user_input)
+    chat_db.save_message(st.session_state.current_conversation_id, "user", user_input)
 
     # Health Agent 응답 생성
     with st.chat_message("assistant"):
@@ -93,7 +93,7 @@ if user_input and st.session_state.health_agent:
                 
                 # 응답 저장
                 st.session_state.messages.append({"role": "assistant", "content": response})
-                db.save_message(st.session_state.current_conversation_id, "assistant", response)
+                chat_db.save_message(st.session_state.current_conversation_id, "assistant", response)
                 
             except Exception as e:
                 error_message = f"응답 생성 중 오류가 발생했습니다: {str(e)}"

@@ -12,7 +12,6 @@ def load_health_documents(data_files=None):
     Returns:
         list: Document 객체 리스트
     """
-    config = Config()
     documents = []
     
     # 기본 데이터 파일 목록
@@ -26,7 +25,7 @@ def load_health_documents(data_files=None):
         ]
     
     for filename in data_files:
-        file_path = os.path.join(config.DATA_DIR, filename)
+        file_path = os.path.join(Config.DATA_DIR, filename)
         
         if not os.path.exists(file_path):
             print(f"파일을 찾을 수 없습니다: {file_path}")

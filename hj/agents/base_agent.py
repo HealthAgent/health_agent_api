@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Dict, Any
+from typing import TypedDict, List
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
@@ -9,7 +9,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from config import Config
 
 class BaseRagState(TypedDict):
-    """RAG 시스템의 상태를 정의하는 TypedDict"""
+    """RAG 시스템 상태 정의"""
     messages: List[BaseMessage]
     question: str
     documents: List[Document]
@@ -20,7 +20,7 @@ class BaseRagState(TypedDict):
     context_type: str  # 'health_data', 'web_search', 'combined'
 
 class BaseAgent:
-    """Health Agent의 기본 클래스"""
+    """Health Agent 기본 클래스"""
     
     def __init__(self, agent_type: str = "health"):
         self.config = Config()
@@ -31,8 +31,8 @@ class BaseAgent:
             temperature=0.7
         )
         
-    def get_extraction_system_prompt(self) -> str:
-        """정보 추출용 시스템 프롬프트 반환"""
+    def _get_extraction_prompt(self) -> str:
+        """정보 추출용 시스템 프롬프트"""
         return """당신은 건강 전문가입니다. 주어진 문서에서 질문과 관련된 건강 정보를 3~5개 정도 추출하세요.
         각 추출된 정보에 대해 다음 두 가지 측면을 0에서 1 사이의 점수로 평가하세요:
         1. 질문과의 관련성
@@ -49,8 +49,8 @@ class BaseAgent:
         
         마지막으로, 추출된 정보를 종합하여 질문에 대한 전반적인 답변 가능성을 0에서 1 사이의 점수로 평가하세요."""
     
-    def get_rewrite_system_prompt(self) -> str:
-        """쿼리 재작성용 시스템 프롬프트 반환"""
+    def _get_rewrite_prompt(self) -> str:
+        """쿼리 재작성용 시스템 프롬프트"""
         return """당신은 건강 정보 검색 전문가입니다. 주어진 원래 질문과 추출된 정보를 바탕으로, 더 관련성 있고 충실한 건강 정보를 찾기 위해 검색 쿼리를 개선해주세요.
 
         다음 사항을 고려하여 검색 쿼리를 개선하세요:
@@ -75,8 +75,8 @@ class BaseAgent:
 
         마지막으로, 제안된 쿼리 중 가장 효과적일 것 같은 쿼리를 선택하고 그 이유를 설명하세요."""
     
-    def get_answer_system_prompt(self) -> str:
-        """답변 생성용 시스템 프롬프트 반환"""
+    def _get_answer_prompt(self) -> str:
+        """답변 생성용 시스템 프롬프트"""
         return """당신은 건강 전문 상담사입니다. 주어진 질문과 검색된 건강 정보를 바탕으로 정확하고 유용한 건강 조언을 제공해주세요.
 
 답변 작성 시 다음 사항을 고려하세요:
@@ -90,16 +90,15 @@ class BaseAgent:
 답변은 자연스럽고 이해하기 쉽게 작성하되, 특정 형식에 구애받지 마세요. 질문에 가장 적합한 방식으로 자유롭게 답변하세요."""
 
     def extract_info(self, state: BaseRagState) -> BaseRagState:
-        """문서에서 관련 정보를 추출합니다."""
+        """문서에서 관련 정보 추출"""
         if not state["documents"]:
             state["extracted_info"] = "검색된 문서가 없습니다."
             return state
         
-        # 문서 내용 결합
         doc_content = "\n\n".join([doc.page_content for doc in state["documents"]])
         
         prompt = ChatPromptTemplate.from_messages([
-            ("system", self.get_extraction_system_prompt()),
+            ("system", self._get_extraction_prompt()),
             ("human", f"질문: {state['question']}\n\n문서 내용:\n{doc_content}")
         ])
         
@@ -112,9 +111,9 @@ class BaseAgent:
         return state
     
     def rewrite_query(self, state: BaseRagState) -> BaseRagState:
-        """검색 쿼리를 재작성합니다."""
+        """검색 쿼리 재작성"""
         prompt = ChatPromptTemplate.from_messages([
-            ("system", self.get_rewrite_system_prompt()),
+            ("system", self._get_rewrite_prompt()),
             ("human", f"원래 질문: {state['question']}\n\n추출된 정보:\n{state['extracted_info']}")
         ])
         
@@ -127,17 +126,15 @@ class BaseAgent:
         return state
     
     def generate_answer(self, state: BaseRagState) -> BaseRagState:
-        """최종 답변을 생성합니다."""
-        # Apple Watch 데이터가 있는 경우에만 포함
+        """최종 답변 생성"""
         apple_watch_info = ""
         if state.get("apple_watch_data") and state["apple_watch_data"] != "":
             apple_watch_info = f"\nApple Watch 데이터:\n{state['apple_watch_data']}"
         
-        # 문서 정보 결합
         doc_info = "\n\n".join([doc.page_content for doc in state["documents"]]) if state["documents"] else "관련 문서가 없습니다."
         
         prompt = ChatPromptTemplate.from_messages([
-            ("system", self.get_answer_system_prompt()),
+            ("system", self._get_answer_prompt()),
             ("human", f"""질문: {state['question']}
 
 검색된 건강 정보:
@@ -151,7 +148,6 @@ class BaseAgent:
             response = self.llm.invoke(prompt.format_messages())
             state["answer"] = response.content
             
-            # 메시지 히스토리에 추가
             if "messages" not in state:
                 state["messages"] = []
             
@@ -166,7 +162,7 @@ class BaseAgent:
         return state
     
     def create_agent(self) -> StateGraph:
-        """LangGraph 기반 에이전트를 생성합니다."""
+        """LangGraph 기반 에이전트 생성"""
         workflow = StateGraph(BaseRagState)
         
         # 노드 추가

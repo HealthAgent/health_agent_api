@@ -10,12 +10,12 @@ def validate_api_key(api_key):
         # 간단한 API 호출로 키 유효성 검증
         llm.invoke("test")
         return True
-    except Exception as e:
+    except Exception:
         return False
 
 def render_sidebar():
     """사이드바 UI 렌더링"""
-    db = ChatDBManager()
+    chat_db = ChatDBManager()
     
     with st.sidebar:
         # OpenAI API 키 입력
@@ -58,24 +58,23 @@ def render_sidebar():
             st.markdown("### History")
             
             # 이전 대화 목록 표시
-            conversations = db.get_conversations()
+            conversations = chat_db.get_conversations()
             for conv in conversations:
                 conv_id, title, created_at, updated_at = conv
-                formatted_date = datetime.strptime(updated_at, "%Y-%m-%d %H:%M:%S").strftime("%Y-%m-%d %H:%M")
                 
                 col1, col2 = st.columns([3, 1])
                 with col1:
                     if st.button(f"{title}", key=f"conv_{conv_id}", use_container_width=True):
                         st.session_state.current_conversation_id = conv_id
                         st.session_state.messages = []
-                        for role, content in db.get_messages(conv_id):
+                        for role, content in chat_db.get_messages(conv_id):
                             st.session_state.messages.append({"role": role, "content": content})
                         st.session_state.system_prompt_created = True
                         st.rerun()
                 
                 with col2:
                     if st.button("🗑️", key=f"delete_{conv_id}", use_container_width=True):
-                        db.delete_conversation(conv_id)
+                        chat_db.delete_conversation(conv_id)
                         st.rerun()
             
             st.divider()
@@ -83,7 +82,7 @@ def render_sidebar():
             # 현재 대화 내보내기
             if st.session_state.get("current_conversation_id"):
                 if st.button("현재 대화 내보내기", use_container_width=True):
-                    messages = db.get_messages(st.session_state.current_conversation_id)
+                    messages = chat_db.get_messages(st.session_state.current_conversation_id)
                     conversation = ""
                     for role, content in messages:
                         if role == "user":

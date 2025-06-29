@@ -1,13 +1,12 @@
 import sqlite3
-import json
 from datetime import datetime
 
 class ChatDBManager:
     def __init__(self, db_path="conversations.db"):
         self.db_path = db_path
-        self.init_db()
+        self._init_db()
 
-    def init_db(self):
+    def _init_db(self):
         """데이터베이스 초기화 및 테이블 생성"""
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
