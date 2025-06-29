@@ -1,7 +1,6 @@
 import streamlit as st
 import os
 from agents.health_agent import create_health_agent
-from utils.ui_utils import render_with_latex
 from utils.ui_components import render_sidebar
 from database.chatdb_manager import ChatDBManager
 from config import Config
@@ -60,10 +59,7 @@ if st.session_state.health_agent is None:
 if st.session_state.messages:
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
-            if msg["role"] == "assistant":
-                st.markdown(render_with_latex(msg["content"]))
-            else:
-                st.markdown(msg["content"])
+            st.markdown(msg["content"])
 
 # 사용자 입력
 user_input = st.chat_input("건강에 관한 질문을 입력하세요...")
@@ -93,7 +89,7 @@ if user_input and st.session_state.health_agent:
                 )
                 
                 # 응답 표시
-                st.markdown(render_with_latex(response))
+                st.markdown(response)
                 
                 # 응답 저장
                 st.session_state.messages.append({"role": "assistant", "content": response})
