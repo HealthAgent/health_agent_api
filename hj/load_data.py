@@ -59,14 +59,13 @@ def main():
     print("=" * 50)
     
     # 설정 검증
-    config = Config()
-    if not config.validate():
+    if not Config.validate():
         print("설정을 확인해주세요.")
         return
     
     # 데이터 디렉토리 확인
-    if not os.path.exists(config.DATA_DIR):
-        print(f"데이터 디렉토리를 찾을 수 없습니다: {config.DATA_DIR}")
+    if not os.path.exists(Config.DATA_DIR):
+        print(f"데이터 디렉토리를 찾을 수 없습니다: {Config.DATA_DIR}")
         return
     
     # 벡터 데이터베이스 생성
