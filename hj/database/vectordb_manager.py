@@ -6,7 +6,18 @@ from langchain_openai import ChatOpenAI
 from config import Config
 
 class VectorDBManager:
+    _instance = None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+    
     def __init__(self):
+        if self._initialized:
+            return
+            
         self.config = Config()
         self.embeddings_model = OpenAIEmbeddings(
             api_key=self.config.OPENAI_API_KEY,
@@ -22,6 +33,7 @@ class VectorDBManager:
         self.compressor = LLMChainExtractor.from_llm(llm)
         
         self.collections = {}
+        self._initialized = True
     
     def create_collection(self, documents, collection_name):
         """문서 컬렉션을 생성하고 벡터화합니다."""

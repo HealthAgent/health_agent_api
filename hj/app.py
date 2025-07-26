@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
 import os
 import logging
@@ -75,9 +75,29 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     user_id: str
     question: str
+    conversation_id: Optional[int] = None  
 
 class ChatResponse(BaseModel):
     answer: str
+    conversation_id: int
+
+class ConversationResponse(BaseModel):
+    id: int
+    title: str
+    created_at: str
+    updated_at: str
+
+class MessageResponse(BaseModel):
+    role: str
+    content: str
+    created_at: str
+
+class ConversationDetailResponse(BaseModel):
+    id: int
+    title: str
+    created_at: str
+    updated_at: str
+    messages: List[MessageResponse]
 
 def get_health_agent():
     """Health Agent 의존성 주입"""
@@ -105,7 +125,8 @@ async def health_check():
     return {
         "status": "healthy",
         "health_agent_ready": health_agent is not None,
-        "database_ready": chat_db is not None
+        "database_ready": chat_db is not None,
+        "database_url": Config().DATABASE_URL.split('@')[0] + "@***" if '@' in Config().DATABASE_URL else "***"
     }
 
 @app.post("/chat", response_model=ChatResponse)
@@ -118,9 +139,16 @@ async def chat(
     try:
         logger.info(f"채팅 요청 수신: user_id={request.user_id}, question={request.question[:50]}...")
         
-        # 대화 세션 생성 또는 기존 세션 사용
-        conversation_title = request.question[:20] + "..." if len(request.question) > 20 else request.question
-        conversation_id = db.create_conversation(conversation_title)
+        # 대화 세션 처리
+        if request.conversation_id:
+            # 기존 대화 세션에 추가
+            conversation_id = request.conversation_id
+            logger.info(f"기존 대화 세션 사용: conversation_id={conversation_id}")
+        else:
+            # 새로운 대화 세션 생성
+            conversation_title = request.question[:20] + "..." if len(request.question) > 20 else request.question
+            conversation_id = db.create_conversation(conversation_title)
+            logger.info(f"새 대화 세션 생성: conversation_id={conversation_id}")
         
         # 사용자 메시지 저장
         db.save_message(conversation_id, "user", request.question)
@@ -137,24 +165,85 @@ async def chat(
         
         logger.info(f"채팅 응답 완료: conversation_id={conversation_id}")
         
-        return ChatResponse(answer=answer)
+        return ChatResponse(answer=answer, conversation_id=conversation_id)
         
     except Exception as e:
         logger.error(f"채팅 처리 중 오류: {e}")
         raise HTTPException(status_code=500, detail=f"채팅 처리 중 오류가 발생했습니다: {str(e)}")
 
-@app.get("/conversations/{user_id}")
+@app.get("/conversations", response_model=List[ConversationResponse])
 async def get_conversations(
-    user_id: str,
     db: ChatDBManager = Depends(get_chat_db)
 ):
-    """사용자의 대화 히스토리 조회"""
+    """모든 대화 세션 목록 조회"""
     try:
         conversations = db.get_conversations()
-        return {"conversations": conversations}
+        return [
+            ConversationResponse(
+                id=conv[0],
+                title=conv[1],
+                created_at=conv[2].isoformat(),
+                updated_at=conv[3].isoformat()
+            )
+            for conv in conversations
+        ]
     except Exception as e:
-        logger.error(f"대화 히스토리 조회 중 오류: {e}")
-        raise HTTPException(status_code=500, detail="대화 히스토리 조회 중 오류가 발생했습니다")
+        logger.error(f"대화 세션 목록 조회 중 오류: {e}")
+        raise HTTPException(status_code=500, detail="대화 세션 목록 조회 중 오류가 발생했습니다")
+
+@app.get("/conversations/{conversation_id}", response_model=ConversationDetailResponse)
+async def get_conversation_detail(
+    conversation_id: int,
+    db: ChatDBManager = Depends(get_chat_db)
+):
+    """특정 대화 세션의 상세 정보 조회"""
+    try:
+        # 대화 세션 정보 조회
+        conversations = db.get_conversations()
+        conversation = None
+        for conv in conversations:
+            if conv[0] == conversation_id:
+                conversation = conv
+                break
+        
+        if not conversation:
+            raise HTTPException(status_code=404, detail="대화 세션을 찾을 수 없습니다")
+        
+        # 메시지 목록 조회
+        messages = db.get_messages(conversation_id)
+        
+        return ConversationDetailResponse(
+            id=conversation[0],
+            title=conversation[1],
+            created_at=conversation[2].isoformat(),
+            updated_at=conversation[3].isoformat(),
+            messages=[
+                MessageResponse(
+                    role=msg[0],
+                    content=msg[1],
+                    created_at=msg[2].isoformat()
+                )
+                for msg in messages
+            ]
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"대화 세션 상세 조회 중 오류: {e}")
+        raise HTTPException(status_code=500, detail="대화 세션 상세 조회 중 오류가 발생했습니다")
+
+@app.delete("/conversations/{conversation_id}")
+async def delete_conversation(
+    conversation_id: int,
+    db: ChatDBManager = Depends(get_chat_db)
+):
+    """대화 세션 삭제"""
+    try:
+        db.delete_conversation(conversation_id)
+        return {"message": f"대화 세션 {conversation_id}가 삭제되었습니다"}
+    except Exception as e:
+        logger.error(f"대화 세션 삭제 중 오류: {e}")
+        raise HTTPException(status_code=500, detail="대화 세션 삭제 중 오류가 발생했습니다")
 
 if __name__ == "__main__":
     import uvicorn
